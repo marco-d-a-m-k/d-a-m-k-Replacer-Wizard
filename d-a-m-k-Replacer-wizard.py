@@ -16,6 +16,7 @@ class DAMKReplacerWizard(object):
         self.font_b = None
         self.scale_percentage = 100.0
         self.changed_letters = []
+        self.unchanged_letters = []
 
     def showUI(self):
         alert = NSAlert.alloc().init()
@@ -59,7 +60,7 @@ class DAMKReplacerWizard(object):
         layer_b = glyph_b.layers[0]  # Assuming default layer
 
         # Save spacing and kerning groups from the new glyph (font_b)
-        new_spacing = (layer_b.LSB, layer_b.RSB)
+        new_spacing = (layer_b.LSB * scale_factor, layer_b.RSB * scale_factor)
         new_left_group = glyph_b.leftKerningGroup
         new_right_group = glyph_b.rightKerningGroup
 
@@ -104,7 +105,7 @@ class DAMKReplacerWizard(object):
             ))
             layer_a.anchors.append(new_anchor)
 
-        # Apply spacing from the new glyph (font_b)
+        # Apply scaled spacing from the new glyph (font_b)
         layer_a.LSB, layer_a.RSB = new_spacing
 
         # Apply kerning groups from the new glyph (font_b)
@@ -126,11 +127,18 @@ class DAMKReplacerWizard(object):
             report_file.write("Target Font: {}\n".format(self.font_a.familyName))
             report_file.write("Source Font: {}\n".format(self.font_b.familyName))
             report_file.write("Scale Percentage: {}%\n\n".format(self.scale_percentage))
-            report_file.write("Changed Letters:\n")
+            report_file.write("Total Glyphs in Source Font: {}\n\n".format(len(self.font_b.glyphs)))
+            
+            report_file.write("Changed Letters ({}):\n".format(len(self.changed_letters)))
             for letter in sorted(self.changed_letters):
                 report_file.write("- {}\n".format(letter))
 
+            report_file.write("\nUnchanged Letters ({}):\n".format(len(self.unchanged_letters)))
+            for letter in sorted(self.unchanged_letters):
+                report_file.write("- {}\n".format(letter))
+
         return report_path
+
 
     def run(self):
         if not self.font_a or not self.font_b:
@@ -151,11 +159,14 @@ class DAMKReplacerWizard(object):
             # Reset kerning for font_a
             self.font_a.kerning.clear()
 
-            for glyph_name in matching_glyphs:
-                glyph_a = self.font_a.glyphs[glyph_name]
-                glyph_b = self.font_b.glyphs[glyph_name]
-
-                self.replaceAndScaleGlyph(glyph_a, glyph_b, scale_factor)
+            # Iterate over glyphs in Font B
+            for glyph_b in self.font_b.glyphs:
+                glyph_name = glyph_b.name
+                if glyph_name in matching_glyphs:
+                    glyph_a = self.font_a.glyphs[glyph_name]
+                    self.replaceAndScaleGlyph(glyph_a, glyph_b, scale_factor)
+                else:
+                    self.unchanged_letters.append(glyph_name)
 
             report_path = self.generateReport()
             NSApp.displayDialog_withTitle_("Replacement completed, Spacing added, Kerning groups added, Kerning not added. Report saved at: {}".format(report_path), "Success")
